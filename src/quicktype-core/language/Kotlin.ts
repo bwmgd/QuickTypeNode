@@ -1,793 +1,788 @@
-import {iterableSome, arrayIntercalate} from "collection-utils";
+import { iterableSome, arrayIntercalate } from "collection-utils";
 
-import {anyTypeIssueAnnotation, nullTypeIssueAnnotation} from "../Annotation";
-import {ConvenienceRenderer, ForbiddenWordsInfo} from "../ConvenienceRenderer";
-import {Name, Namer, funPrefixNamer} from "../Naming";
-import {EnumOption, Option, StringOption, OptionValues, getOptionValues} from "../RendererOptions";
-import {Sourcelike, maybeAnnotated, modifySource} from "../Source";
+import { anyTypeIssueAnnotation, nullTypeIssueAnnotation } from "../Annotation";
+import { ConvenienceRenderer, ForbiddenWordsInfo } from "../ConvenienceRenderer";
+import { Name, Namer, funPrefixNamer } from "../Naming";
+import { EnumOption, Option, StringOption, OptionValues, getOptionValues } from "../RendererOptions";
+import { Sourcelike, maybeAnnotated, modifySource } from "../Source";
 import {
-  allLowerWordStyle,
-  allUpperWordStyle,
-  camelCase,
-  combineWords,
-  escapeNonPrintableMapper,
-  firstUpperWordStyle,
-  intToHex,
-  isDigit,
-  isLetterOrUnderscore,
-  isNumeric,
-  isPrintable,
-  legalizeCharacters,
-  splitIntoWords,
-  utf32ConcatMap
+    allLowerWordStyle,
+    allUpperWordStyle,
+    camelCase,
+    combineWords,
+    escapeNonPrintableMapper,
+    firstUpperWordStyle,
+    intToHex,
+    isDigit,
+    isLetterOrUnderscore,
+    isNumeric,
+    isPrintable,
+    legalizeCharacters,
+    splitIntoWords,
+    utf32ConcatMap
 } from "../support/Strings";
-import {assertNever, mustNotHappen} from "../support/Support";
-import {TargetLanguage} from "../TargetLanguage";
+import { assertNever, mustNotHappen } from "../support/Support";
+import { TargetLanguage } from "../TargetLanguage";
 import {
-  ArrayType,
-  ClassProperty,
-  ClassType,
-  EnumType,
-  MapType,
-  ObjectType,
-  PrimitiveType,
-  Type,
-  UnionType
+    ArrayType,
+    ClassProperty,
+    ClassType,
+    EnumType,
+    MapType,
+    ObjectType,
+    PrimitiveType,
+    Type,
+    UnionType
 } from "../Type";
-import {matchType, nullableFromUnion, removeNullFromUnion} from "../TypeUtils";
-import {RenderContext} from "../Renderer";
-import {acronymOption, acronymStyle, AcronymStyleOptions} from "../support/Acronyms";
-import {custom_dic, words} from "../../utils/words";
+import { matchType, nullableFromUnion, removeNullFromUnion } from "../TypeUtils";
+import { RenderContext } from "../Renderer";
+import { acronymOption, acronymStyle, AcronymStyleOptions } from "../support/Acronyms";
 
 export enum Framework {
-  None,
-  Jackson,
-  Klaxon,
-  KotlinX,
-  Moshi
+    None,
+    Jackson,
+    Klaxon,
+    KotlinX,
+    Moshi
 }
 
 export const kotlinOptions = {
-  framework: new EnumOption(
-    "framework",
-    "Serialization framework",
-    [
-      ["just-types", Framework.None],
-      ["jackson", Framework.Jackson],
-      ["klaxon", Framework.Klaxon],
-      ["kotlinx", Framework.KotlinX],
-      ["moshi", Framework.Moshi]
-    ],
-    "klaxon"
-  ),
-  acronymStyle: acronymOption(AcronymStyleOptions.Pascal),
-  packageName: new StringOption("package", "Package", "PACKAGE", "quicktype")
+    framework: new EnumOption(
+        "framework",
+        "Serialization framework",
+        [
+            ["just-types", Framework.None],
+            ["jackson", Framework.Jackson],
+            ["klaxon", Framework.Klaxon],
+            ["kotlinx", Framework.KotlinX],
+            ["moshi", Framework.Moshi]
+        ],
+        "klaxon"
+    ),
+    acronymStyle: acronymOption(AcronymStyleOptions.Pascal),
+    packageName: new StringOption("package", "Package", "PACKAGE", "quicktype")
 };
 
 export class KotlinTargetLanguage extends TargetLanguage {
-  constructor() {
-    super("Kotlin", ["kotlin"], "kt");
-  }
-
-  protected getOptions(): Option<any>[] {
-    return [kotlinOptions.framework, kotlinOptions.acronymStyle, kotlinOptions.packageName];
-  }
-
-  get supportsOptionalClassProperties(): boolean {
-    return true;
-  }
-
-  get supportsUnionsWithBothNumberTypes(): boolean {
-    return true;
-  }
-
-  protected makeRenderer(
-    renderContext: RenderContext,
-    untypedOptionValues: { [name: string]: any }
-  ): ConvenienceRenderer {
-    const options = getOptionValues(kotlinOptions, untypedOptionValues);
-
-    switch (options.framework) {
-      case Framework.None:
-        return new KotlinRenderer(this, renderContext, options);
-      case Framework.Jackson:
-        return new KotlinJacksonRenderer(this, renderContext, options);
-      case Framework.Klaxon:
-        return new KotlinKlaxonRenderer(this, renderContext, options);
-      case Framework.KotlinX:
-        return new KotlinXRenderer(this, renderContext, options);
-      case Framework.Moshi:
-        return new KotlinMoshiRenderer(this, renderContext, options);
-      default:
-        return assertNever(options.framework);
+    constructor() {
+        super("Kotlin", ["kotlin"], "kt");
     }
-  }
+
+    protected getOptions(): Option<any>[] {
+        return [kotlinOptions.framework, kotlinOptions.acronymStyle, kotlinOptions.packageName];
+    }
+
+    get supportsOptionalClassProperties(): boolean {
+        return true;
+    }
+
+    get supportsUnionsWithBothNumberTypes(): boolean {
+        return true;
+    }
+
+    protected makeRenderer(
+        renderContext: RenderContext,
+        untypedOptionValues: { [name: string]: any }
+    ): ConvenienceRenderer {
+        const options = getOptionValues(kotlinOptions, untypedOptionValues);
+
+        switch (options.framework) {
+            case Framework.None:
+                return new KotlinRenderer(this, renderContext, options);
+            case Framework.Jackson:
+                return new KotlinJacksonRenderer(this, renderContext, options);
+            case Framework.Klaxon:
+                return new KotlinKlaxonRenderer(this, renderContext, options);
+            case Framework.KotlinX:
+                return new KotlinXRenderer(this, renderContext, options);
+            case Framework.Moshi:
+                return new KotlinMoshiRenderer(this, renderContext, options);
+            default:
+                return assertNever(options.framework);
+        }
+    }
 }
 
 const keywords = [
-  "package",
-  "as",
-  "typealias",
-  "class",
-  "this",
-  "super",
-  "val",
-  "var",
-  "fun",
-  "for",
-  "null",
-  "true",
-  "false",
-  "is",
-  "in",
-  "throw",
-  "return",
-  "break",
-  "continue",
-  "object",
-  "if",
-  "try",
-  "else",
-  "while",
-  "do",
-  "when",
-  "interface",
-  "typeof",
-  "klaxon",
-  "toJson",
-  "Any",
-  "Boolean",
-  "Double",
-  "Float",
-  "Long",
-  "Int",
-  "Short",
-  "System",
-  "Byte",
-  "String",
-  "Array",
-  "List",
-  "Map",
-  "Enum",
-  "Class",
-  "JsonObject",
-  "JsonValue",
-  "Converter",
-  "Klaxon"
+    "package",
+    "as",
+    "typealias",
+    "class",
+    "this",
+    "super",
+    "val",
+    "var",
+    "fun",
+    "for",
+    "null",
+    "true",
+    "false",
+    "is",
+    "in",
+    "throw",
+    "return",
+    "break",
+    "continue",
+    "object",
+    "if",
+    "try",
+    "else",
+    "while",
+    "do",
+    "when",
+    "interface",
+    "typeof",
+    "klaxon",
+    "toJson",
+    "Any",
+    "Boolean",
+    "Double",
+    "Float",
+    "Long",
+    "Int",
+    "Short",
+    "System",
+    "Byte",
+    "String",
+    "Array",
+    "List",
+    "Map",
+    "Enum",
+    "Class",
+    "JsonObject",
+    "JsonValue",
+    "Converter",
+    "Klaxon"
 ];
 
 function isPartCharacter(codePoint: number): boolean {
-  return isLetterOrUnderscore(codePoint) || isNumeric(codePoint);
+    return isLetterOrUnderscore(codePoint) || isNumeric(codePoint);
 }
 
 function isStartCharacter(codePoint: number): boolean {
-  return isPartCharacter(codePoint) && !isDigit(codePoint);
+    return isPartCharacter(codePoint) && !isDigit(codePoint);
 }
 
 const legalizeName = legalizeCharacters(isPartCharacter);
 
 function kotlinNameStyle(
-  isUpper: boolean,
-  original: string,
-  acronymsStyle: (s: string) => string = allUpperWordStyle
+    isUpper: boolean,
+    original: string,
+    acronymsStyle: (s: string) => string = allUpperWordStyle
 ): string {
-  const words = splitIntoWords(original);
-  return combineWords(
-    words,
-    legalizeName,
-    isUpper ? firstUpperWordStyle : allLowerWordStyle,
-    firstUpperWordStyle,
-    isUpper ? allUpperWordStyle : allLowerWordStyle,
-    acronymsStyle,
-    "",
-    isStartCharacter
-  );
+    const words = splitIntoWords(original);
+    return combineWords(
+        words,
+        legalizeName,
+        isUpper ? firstUpperWordStyle : allLowerWordStyle,
+        firstUpperWordStyle,
+        isUpper ? allUpperWordStyle : allLowerWordStyle,
+        acronymsStyle,
+        "",
+        isStartCharacter
+    );
 }
 
 function unicodeEscape(codePoint: number): string {
-  return "\\u" + intToHex(codePoint, 4);
+    return "\\u" + intToHex(codePoint, 4);
 }
 
 const _stringEscape = utf32ConcatMap(escapeNonPrintableMapper(isPrintable, unicodeEscape));
 
 function stringEscape(s: string): string {
-  // "$this" is a template string in Kotlin so we have to escape $
-  return _stringEscape(s).replace(/\$/g, "\\$");
+    // "$this" is a template string in Kotlin so we have to escape $
+    return _stringEscape(s).replace(/\$/g, "\\$");
 }
 
 export class KotlinRenderer extends ConvenienceRenderer {
-  constructor(
-    targetLanguage: TargetLanguage,
-    renderContext: RenderContext,
-    protected readonly _kotlinOptions: OptionValues<typeof kotlinOptions>
-  ) {
-    super(targetLanguage, renderContext);
-  }
-
-  protected forbiddenNamesForGlobalNamespace(): string[] {
-    return keywords;
-  }
-
-  protected forbiddenForObjectProperties(_o: ObjectType, _classNamed: Name): ForbiddenWordsInfo {
-    return {names: [], includeGlobalForbidden: true};
-  }
-
-  protected forbiddenForEnumCases(_e: EnumType, _enumName: Name): ForbiddenWordsInfo {
-    return {names: [], includeGlobalForbidden: true};
-  }
-
-  protected forbiddenForUnionMembers(_u: UnionType, _unionName: Name): ForbiddenWordsInfo {
-    return {names: [], includeGlobalForbidden: false};
-  }
-
-  protected topLevelNameStyle(rawName: string): string {
-    return kotlinNameStyle(true, rawName);
-  }
-
-  protected makeNamedTypeNamer(): Namer {
-    return funPrefixNamer("upper", s => kotlinNameStyle(true, s, acronymStyle(this._kotlinOptions.acronymStyle)));
-  }
-
-  protected namerForObjectProperty(): Namer {
-    return funPrefixNamer("lower", s => kotlinNameStyle(false, s, acronymStyle(this._kotlinOptions.acronymStyle)));
-  }
-
-  protected makeUnionMemberNamer(): Namer {
-    return funPrefixNamer("upper", s => kotlinNameStyle(true, s) + "Value");
-  }
-
-  protected makeEnumCaseNamer(): Namer {
-    return funPrefixNamer("upper", s => kotlinNameStyle(true, s, acronymStyle(this._kotlinOptions.acronymStyle)));
-  }
-
-  protected emitDescriptionBlock(lines: Sourcelike[]): void {
-    this.emitCommentLines(lines, " * ", "/**", " */");
-  }
-
-  protected emitBlock(line: Sourcelike, f: () => void, delimiter: "curly" | "paren" | "lambda" = "curly"): void {
-    const [open, close] = delimiter === "curly" ? ["{", "}"] : delimiter === "paren" ? ["(", ")"] : ["{", "})"];
-    this.emitLine(line, " ", open);
-    this.indent(f);
-    this.emitLine(close);
-  }
-
-  protected anySourceType(optional: string): Sourcelike {
-    return ["Any", optional];
-  }
-
-  // (asarazan): I've broken out the following two functions
-  // because some renderers, such as kotlinx, can cope with `any`, while some get mad.
-  protected arrayType(arrayType: ArrayType, withIssues = false, _noOptional = false): Sourcelike {
-    const cc = modifySource(upperFirst, modifySource(tokenize, this.kotlinType(arrayType.items, withIssues)));
-    return ["List<", cc, ">"];
-  }
-
-  protected mapType(mapType: MapType, withIssues = false, _noOptional = false): Sourcelike {
-    return ["Map<String, ", this.kotlinType(mapType.values, withIssues), ">"];
-  }
-
-  protected kotlinType(t: Type, withIssues = false, noOptional = false): Sourcelike {
-    const optional = noOptional ? "" : "?";
-    return matchType<Sourcelike>(
-      t,
-      _anyType => {
-        return maybeAnnotated(withIssues, anyTypeIssueAnnotation, this.anySourceType(optional));
-      },
-      _nullType => {
-        return maybeAnnotated(withIssues, nullTypeIssueAnnotation, this.anySourceType(optional));
-      },
-      _boolType => "Boolean",
-      _integerType => "Long",
-      _doubleType => "Double",
-      _stringType => "String",
-      arrayType => this.arrayType(arrayType, withIssues),
-      classType => this.nameForNamedType(classType),
-      mapType => this.mapType(mapType, withIssues),
-      enumType => this.nameForNamedType(enumType),
-      unionType => {
-        const nullable = nullableFromUnion(unionType);
-        if (nullable !== null) return [this.kotlinType(nullable, withIssues), optional];
-        return this.nameForNamedType(unionType);
-      }
-    );
-  }
-
-  protected emitUsageHeader(): void {
-    // To be overridden
-  }
-
-  protected emitHeader(): void {
-    // this.emitLine("//YApi QuickType插件生成，具体参考文档:https://github.com/RmondJone/YapiQuickType")
-    // if (this.leadingComments !== undefined) {
-    //     this.emitCommentLines(this.leadingComments);
-    // } else {
-    //     this.emitUsageHeader();
-    // }
-    //
-    // this.ensureBlankLine();
-    this.emitLine("package ", this._kotlinOptions.packageName);
-    this.ensureBlankLine();
-  }
-
-  protected emitTopLevelArray(t: ArrayType, name: Name): void {
-    const elementType = this.kotlinType(t.items);
-    this.emitLine(["typealias ", name, " = ArrayList<", elementType, ">"]);
-  }
-
-  protected emitTopLevelMap(t: MapType, name: Name): void {
-    const elementType = this.kotlinType(t.values);
-    this.emitLine(["typealias ", name, " = HashMap<String, ", elementType, ">"]);
-  }
-
-  protected emitEmptyClassDefinition(c: ClassType, className: Name): void {
-    this.emitDescription(this.descriptionForType(c));
-    this.emitClassAnnotations(c, className);
-    this.emitLine("class ", className, "()");
-  }
-
-  protected emitClassDefinition(c: ClassType, className: Name): void {
-    if (c.getProperties().size === 0) {
-      this.emitEmptyClassDefinition(c, className);
-      return;
+    constructor(
+        targetLanguage: TargetLanguage,
+        renderContext: RenderContext,
+        protected readonly _kotlinOptions: OptionValues<typeof kotlinOptions>
+    ) {
+        super(targetLanguage, renderContext);
     }
 
-    const kotlinType = (p: ClassProperty) => {
-      if (p.isOptional) {
-        return [this.kotlinType(p.type, true, true), "?"];
-      } else {
-        return this.kotlinType(p.type, true);
-      }
-    };
-
-    this.emitDescription(this.descriptionForType(c));
-    this.emitClassAnnotations(c, className);
-    const classModify = modifySource(upperFirst, modifySource(tokenize, className));
-    this.emitLine("data class ", classModify, " (");
-    this.indent(() => {
-      let count = c.getProperties().size;
-      // let first = true;
-      this.forEachClassProperty(c, "none", (name, jsonName, p) => {
-        const nullable = p.type.kind === "union" && nullableFromUnion(p.type as UnionType) !== null;
-        const nullableOrOptional = p.isOptional || p.type.kind === "null" || nullable;
-        const last = --count === 0;
-        let meta: Array<() => void> = [];
-
-        const description = this.descriptionForClassProperty(c, jsonName);
-        if (description !== undefined) {
-          meta.push(() => this.emitDescription(description));
-        }
-
-        this.renameAttribute(name, jsonName, !nullableOrOptional, meta);
-
-        // if (meta.length > 0 && !first) {
-        //     this.ensureBlankLine();
-        // }
-
-        for (const emit of meta) {
-          emit();
-        }
-
-        const cname = modifySource(tokenize, name);
-        // this.emitLine("val ", name, ": ", kotlinType(p), nullableOrOptional ? " = null" : "", last ? "" : ",");
-        this.emitLine("val ", cname, ": ", kotlinType(p), "?", last ? "" : ",");
-
-        // if (meta.length > 0 && !last) {
-        //     this.ensureBlankLine();
-        // }
-
-        // first = false;
-      });
-    });
-
-    this.emitClassDefinitionMethods(c, className);
-  }
-
-  protected emitClassDefinitionMethods(_c: ClassType, _className: Name) {
-    this.emitLine(")");
-  }
-
-  protected emitClassAnnotations(_c: Type, _className: Name) {
-    // to be overridden
-  }
-
-  protected renameAttribute(_name: Name, _jsonName: string, _required: boolean, _meta: Array<() => void>) {
-    // to be overridden
-  }
-
-  protected emitEnumDefinition(e: EnumType, enumName: Name): void {
-    this.emitDescription(this.descriptionForType(e));
-
-    this.emitBlock(["enum class ", enumName], () => {
-      let count = e.cases.size;
-      this.forEachEnumCase(e, "none", name => {
-        this.emitLine(name, --count === 0 ? "" : ",");
-      });
-    });
-  }
-
-  protected emitUnionDefinition(u: UnionType, unionName: Name): void {
-    function sortBy(t: Type): string {
-      const kind = t.kind;
-      if (kind === "class") return kind;
-      return "_" + kind;
+    protected forbiddenNamesForGlobalNamespace(): string[] {
+        return keywords;
     }
 
-    this.emitDescription(this.descriptionForType(u));
+    protected forbiddenForObjectProperties(_o: ObjectType, _classNamed: Name): ForbiddenWordsInfo {
+        return { names: [], includeGlobalForbidden: true };
+    }
 
-    const [maybeNull, nonNulls] = removeNullFromUnion(u, sortBy);
-    this.emitClassAnnotations(u, unionName);
-    this.emitBlock(["sealed class ", unionName], () => {
-      {
-        let table: Sourcelike[][] = [];
-        this.forEachUnionMember(u, nonNulls, "none", null, (name, t) => {
-          table.push([
-            ["class ", name, "(val value: ", this.kotlinType(t), ")"],
-            [" : ", unionName, "()"]
-          ]);
+    protected forbiddenForEnumCases(_e: EnumType, _enumName: Name): ForbiddenWordsInfo {
+        return { names: [], includeGlobalForbidden: true };
+    }
+
+    protected forbiddenForUnionMembers(_u: UnionType, _unionName: Name): ForbiddenWordsInfo {
+        return { names: [], includeGlobalForbidden: false };
+    }
+
+    protected topLevelNameStyle(rawName: string): string {
+        return kotlinNameStyle(true, rawName);
+    }
+
+    protected makeNamedTypeNamer(): Namer {
+        return funPrefixNamer("upper", s => kotlinNameStyle(true, s, acronymStyle(this._kotlinOptions.acronymStyle)));
+    }
+
+    protected namerForObjectProperty(): Namer {
+        return funPrefixNamer("lower", s => kotlinNameStyle(false, s, acronymStyle(this._kotlinOptions.acronymStyle)));
+    }
+
+    protected makeUnionMemberNamer(): Namer {
+        return funPrefixNamer("upper", s => kotlinNameStyle(true, s) + "Value");
+    }
+
+    protected makeEnumCaseNamer(): Namer {
+        return funPrefixNamer("upper", s => kotlinNameStyle(true, s, acronymStyle(this._kotlinOptions.acronymStyle)));
+    }
+
+    protected emitDescriptionBlock(lines: Sourcelike[]): void {
+        this.emitCommentLines(lines, " * ", "/**", " */");
+    }
+
+    protected emitBlock(line: Sourcelike, f: () => void, delimiter: "curly" | "paren" | "lambda" = "curly"): void {
+        const [open, close] = delimiter === "curly" ? ["{", "}"] : delimiter === "paren" ? ["(", ")"] : ["{", "})"];
+        this.emitLine(line, " ", open);
+        this.indent(f);
+        this.emitLine(close);
+    }
+
+    protected anySourceType(optional: string): Sourcelike {
+        return ["Any", optional];
+    }
+
+    // (asarazan): I've broken out the following two functions
+    // because some renderers, such as kotlinx, can cope with `any`, while some get mad.
+    protected arrayType(arrayType: ArrayType, withIssues = false, _noOptional = false): Sourcelike {
+        return ["List<", this.kotlinType(arrayType.items, withIssues), ">"];
+    }
+
+    protected mapType(mapType: MapType, withIssues = false, _noOptional = false): Sourcelike {
+        return ["Map<String, ", this.kotlinType(mapType.values, withIssues), ">"];
+    }
+
+    protected kotlinType(t: Type, withIssues = false, noOptional = false): Sourcelike {
+        const optional = noOptional ? "" : "?";
+        return matchType<Sourcelike>(
+            t,
+            _anyType => {
+                return maybeAnnotated(withIssues, anyTypeIssueAnnotation, this.anySourceType(optional));
+            },
+            _nullType => {
+                return maybeAnnotated(withIssues, nullTypeIssueAnnotation, this.anySourceType(optional));
+            },
+            _boolType => "Boolean",
+            _integerType => "Long",
+            _doubleType => "Double",
+            _stringType => "String",
+            arrayType => this.arrayType(arrayType, withIssues),
+            classType => this.nameForNamedType(classType),
+            mapType => this.mapType(mapType, withIssues),
+            enumType => this.nameForNamedType(enumType),
+            unionType => {
+                const nullable = nullableFromUnion(unionType);
+                if (nullable !== null) return [this.kotlinType(nullable, withIssues), optional];
+                return this.nameForNamedType(unionType);
+            }
+        );
+    }
+
+    protected emitUsageHeader(): void {
+        // To be overridden
+    }
+
+    protected emitHeader(): void {
+        // this.emitLine("//YApi QuickType插件生成，具体参考文档:https://github.com/RmondJone/YapiQuickType")
+        // if (this.leadingComments !== undefined) {
+        //     this.emitCommentLines(this.leadingComments);
+        // } else {
+        //     this.emitUsageHeader();
+        // }
+        //
+        // this.ensureBlankLine();
+        this.emitLine("package ", this._kotlinOptions.packageName);
+        this.ensureBlankLine();
+    }
+
+    protected emitTopLevelArray(t: ArrayType, name: Name): void {
+        const elementType = this.kotlinType(t.items);
+        this.emitLine(["typealias ", name, " = ArrayList<", elementType, ">"]);
+    }
+
+    protected emitTopLevelMap(t: MapType, name: Name): void {
+        const elementType = this.kotlinType(t.values);
+        this.emitLine(["typealias ", name, " = HashMap<String, ", elementType, ">"]);
+    }
+
+    protected emitEmptyClassDefinition(c: ClassType, className: Name): void {
+        this.emitDescription(this.descriptionForType(c));
+        this.emitClassAnnotations(c, className);
+        this.emitLine("class ", className, "()");
+    }
+
+    protected emitClassDefinition(c: ClassType, className: Name): void {
+        if (c.getProperties().size === 0) {
+            this.emitEmptyClassDefinition(c, className);
+            return;
+        }
+
+        const kotlinType = (p: ClassProperty) => {
+            if (p.isOptional) {
+                return [this.kotlinType(p.type, true, true), "?"];
+            } else {
+                return this.kotlinType(p.type, true);
+            }
+        };
+
+        this.emitDescription(this.descriptionForType(c));
+        this.emitClassAnnotations(c, className);
+        this.emitLine("data class ", className, " (");
+        this.indent(() => {
+            let count = c.getProperties().size;
+            // let first = true;
+            this.forEachClassProperty(c, "none", (name, jsonName, p) => {
+                const nullable = p.type.kind === "union" && nullableFromUnion(p.type as UnionType) !== null;
+                const nullableOrOptional = p.isOptional || p.type.kind === "null" || nullable;
+                const last = --count === 0;
+                let meta: Array<() => void> = [];
+
+                const description = this.descriptionForClassProperty(c, jsonName);
+                if (description !== undefined) {
+                    meta.push(() => this.emitDescription(description));
+                }
+
+                this.renameAttribute(name, jsonName, !nullableOrOptional, meta);
+
+                // if (meta.length > 0 && !first) {
+                //     this.ensureBlankLine();
+                // }
+
+                for (const emit of meta) {
+                    emit();
+                }
+
+                this.emitLine("val ", name, ": ", kotlinType(p), nullableOrOptional ? " = null" : "", last ? "" : ",");
+
+                // if (meta.length > 0 && !last) {
+                //     this.ensureBlankLine();
+                // }
+
+                // first = false;
+            });
         });
-        if (maybeNull !== null) {
-          table.push([
-            ["class ", this.nameForUnionMember(u, maybeNull), "()"],
-            [" : ", unionName, "()"]
-          ]);
+
+        this.emitClassDefinitionMethods(c, className);
+    }
+
+    protected emitClassDefinitionMethods(_c: ClassType, _className: Name) {
+        this.emitLine(")");
+    }
+
+    protected emitClassAnnotations(_c: Type, _className: Name) {
+        // to be overridden
+    }
+
+    protected renameAttribute(_name: Name, _jsonName: string, _required: boolean, _meta: Array<() => void>) {
+        // to be overridden
+    }
+
+    protected emitEnumDefinition(e: EnumType, enumName: Name): void {
+        this.emitDescription(this.descriptionForType(e));
+
+        this.emitBlock(["enum class ", enumName], () => {
+            let count = e.cases.size;
+            this.forEachEnumCase(e, "none", name => {
+                this.emitLine(name, --count === 0 ? "" : ",");
+            });
+        });
+    }
+
+    protected emitUnionDefinition(u: UnionType, unionName: Name): void {
+        function sortBy(t: Type): string {
+            const kind = t.kind;
+            if (kind === "class") return kind;
+            return "_" + kind;
         }
-        this.emitTable(table);
-      }
 
-      this.emitUnionDefinitionMethods(u, nonNulls, maybeNull, unionName);
-    });
-  }
+        this.emitDescription(this.descriptionForType(u));
 
-  protected emitUnionDefinitionMethods(
-    _u: UnionType,
-    _nonNulls: ReadonlySet<Type>,
-    _maybeNull: PrimitiveType | null,
-    _unionName: Name
-  ) {
-    // to be overridden
-  }
+        const [maybeNull, nonNulls] = removeNullFromUnion(u, sortBy);
+        this.emitClassAnnotations(u, unionName);
+        this.emitBlock(["sealed class ", unionName], () => {
+            {
+                let table: Sourcelike[][] = [];
+                this.forEachUnionMember(u, nonNulls, "none", null, (name, t) => {
+                    table.push([
+                        ["class ", name, "(val value: ", this.kotlinType(t), ")"],
+                        [" : ", unionName, "()"]
+                    ]);
+                });
+                if (maybeNull !== null) {
+                    table.push([
+                        ["class ", this.nameForUnionMember(u, maybeNull), "()"],
+                        [" : ", unionName, "()"]
+                    ]);
+                }
+                this.emitTable(table);
+            }
 
-  protected emitSourceStructure(): void {
-    this.emitHeader();
+            this.emitUnionDefinitionMethods(u, nonNulls, maybeNull, unionName);
+        });
+    }
 
-    // Top-level arrays, maps
-    this.forEachTopLevel("leading", (t, name) => {
-      if (t instanceof ArrayType) {
-        this.emitTopLevelArray(t, name);
-      } else if (t instanceof MapType) {
-        this.emitTopLevelMap(t, name);
-      }
-    });
+    protected emitUnionDefinitionMethods(
+        _u: UnionType,
+        _nonNulls: ReadonlySet<Type>,
+        _maybeNull: PrimitiveType | null,
+        _unionName: Name
+    ) {
+        // to be overridden
+    }
 
-    this.forEachNamedType(
-      "leading-and-interposing",
-      (c: ClassType, n: Name) => this.emitClassDefinition(c, n),
-      (e, n) => this.emitEnumDefinition(e, n),
-      (u, n) => this.emitUnionDefinition(u, n)
-    );
-  }
+    protected emitSourceStructure(): void {
+        this.emitHeader();
+
+        // Top-level arrays, maps
+        this.forEachTopLevel("leading", (t, name) => {
+            if (t instanceof ArrayType) {
+                this.emitTopLevelArray(t, name);
+            } else if (t instanceof MapType) {
+                this.emitTopLevelMap(t, name);
+            }
+        });
+
+        this.forEachNamedType(
+            "leading-and-interposing",
+            (c: ClassType, n: Name) => this.emitClassDefinition(c, n),
+            (e, n) => this.emitEnumDefinition(e, n),
+            (u, n) => this.emitUnionDefinition(u, n)
+        );
+    }
 }
 
 export class KotlinKlaxonRenderer extends KotlinRenderer {
-  constructor(
-    targetLanguage: TargetLanguage,
-    renderContext: RenderContext,
-    _kotlinOptions: OptionValues<typeof kotlinOptions>
-  ) {
-    super(targetLanguage, renderContext, _kotlinOptions);
-  }
-
-  private unionMemberFromJsonValue(t: Type, e: Sourcelike): Sourcelike {
-    return matchType<Sourcelike>(
-      t,
-      _anyType => [e, ".inside"],
-      _nullType => "null",
-      _boolType => [e, ".boolean"],
-      _integerType => ["(", e, ".int?.toLong() ?: ", e, ".longValue)"],
-      _doubleType => [e, ".double"],
-      _stringType => [e, ".string"],
-      arrayType => [e, ".array?.let { klaxon.parseFromJsonArray<", this.kotlinType(arrayType.items), ">(it) }"],
-      _classType => [e, ".obj?.let { klaxon.parseFromJsonObject<", this.kotlinType(t), ">(it) }"],
-      _mapType => [e, ".obj?.let { klaxon.parseFromJsonObject<", this.kotlinType(t), ">(it) }"],
-      enumType => [e, ".string?.let { ", this.kotlinType(enumType), ".fromValue(it) }"],
-      _unionType => mustNotHappen()
-    );
-  }
-
-  private unionMemberJsonValueGuard(t: Type, _e: Sourcelike): Sourcelike {
-    return matchType<Sourcelike>(
-      t,
-      _anyType => "is Any",
-      _nullType => "null",
-      _boolType => "is Boolean",
-      _integerType => "is Int, is Long",
-      _doubleType => "is Double",
-      _stringType => "is String",
-      _arrayType => "is JsonArray<*>",
-      // These could be stricter, but for now we don't allow maps
-      // and objects in the same union
-      _classType => "is JsonObject",
-      _mapType => "is JsonObject",
-      // This could be stricter, but for now we don't allow strings
-      // and enums in the same union
-      _enumType => "is String",
-      _unionType => mustNotHappen()
-    );
-  }
-
-  protected emitUsageHeader(): void {
-    this.emitLine("// To parse the JSON, install Klaxon and do:");
-    this.emitLine("//");
-    this.forEachTopLevel("none", (_, name) => {
-      this.emitLine("//   val ", modifySource(camelCase, name), " = ", name, ".fromJson(jsonString)");
-    });
-  }
-
-  protected emitHeader(): void {
-    super.emitHeader();
-
-    this.emitLine("import com.beust.klaxon.*");
-
-    const hasUnions = iterableSome(
-      this.typeGraph.allNamedTypes(),
-      t => t instanceof UnionType && nullableFromUnion(t) === null
-    );
-    const hasEmptyObjects = iterableSome(
-      this.typeGraph.allNamedTypes(),
-      c => c instanceof ClassType && c.getProperties().size === 0
-    );
-    if (hasUnions || this.haveEnums || hasEmptyObjects) {
-      this.emitGenericConverter();
+    constructor(
+        targetLanguage: TargetLanguage,
+        renderContext: RenderContext,
+        _kotlinOptions: OptionValues<typeof kotlinOptions>
+    ) {
+        super(targetLanguage, renderContext, _kotlinOptions);
     }
 
-    let converters: Sourcelike[][] = [];
-    if (hasEmptyObjects) {
-      converters.push([[".convert(JsonObject::class,"], [" { it.obj!! },"], [" { it.toJsonString() })"]]);
+    private unionMemberFromJsonValue(t: Type, e: Sourcelike): Sourcelike {
+        return matchType<Sourcelike>(
+            t,
+            _anyType => [e, ".inside"],
+            _nullType => "null",
+            _boolType => [e, ".boolean"],
+            _integerType => ["(", e, ".int?.toLong() ?: ", e, ".longValue)"],
+            _doubleType => [e, ".double"],
+            _stringType => [e, ".string"],
+            arrayType => [e, ".array?.let { klaxon.parseFromJsonArray<", this.kotlinType(arrayType.items), ">(it) }"],
+            _classType => [e, ".obj?.let { klaxon.parseFromJsonObject<", this.kotlinType(t), ">(it) }"],
+            _mapType => [e, ".obj?.let { klaxon.parseFromJsonObject<", this.kotlinType(t), ">(it) }"],
+            enumType => [e, ".string?.let { ", this.kotlinType(enumType), ".fromValue(it) }"],
+            _unionType => mustNotHappen()
+        );
     }
-    this.forEachEnum("none", (_, name) => {
-      converters.push([
-        [".convert(", name, "::class,"],
-        [" { ", name, ".fromValue(it.string!!) },"],
-        [' { "\\"${it.value}\\"" })']
-      ]);
-    });
-    this.forEachUnion("none", (_, name) => {
-      converters.push([
-        [".convert(", name, "::class,"],
-        [" { ", name, ".fromJson(it) },"],
-        [" { it.toJson() }, true)"]
-      ]);
-    });
 
-    this.ensureBlankLine();
-    this.emitLine("private val klaxon = Klaxon()");
-    if (converters.length > 0) {
-      this.indent(() => this.emitTable(converters));
+    private unionMemberJsonValueGuard(t: Type, _e: Sourcelike): Sourcelike {
+        return matchType<Sourcelike>(
+            t,
+            _anyType => "is Any",
+            _nullType => "null",
+            _boolType => "is Boolean",
+            _integerType => "is Int, is Long",
+            _doubleType => "is Double",
+            _stringType => "is String",
+            _arrayType => "is JsonArray<*>",
+            // These could be stricter, but for now we don't allow maps
+            // and objects in the same union
+            _classType => "is JsonObject",
+            _mapType => "is JsonObject",
+            // This could be stricter, but for now we don't allow strings
+            // and enums in the same union
+            _enumType => "is String",
+            _unionType => mustNotHappen()
+        );
     }
-  }
 
-  protected emitTopLevelArray(t: ArrayType, name: Name): void {
-    const elementType = this.kotlinType(t.items);
-    this.emitBlock(
-      ["class ", name, "(elements: Collection<", elementType, ">) : ArrayList<", elementType, ">(elements)"],
-      () => {
-        this.emitLine("public fun toJson() = klaxon.toJsonString(this)");
-        this.ensureBlankLine();
-        this.emitBlock("companion object", () => {
-          this.emitLine(
-            "public fun fromJson(json: String) = ",
-            name,
-            "(klaxon.parseArray<",
-            elementType,
-            ">(json)!!)"
-          );
+    protected emitUsageHeader(): void {
+        this.emitLine("// To parse the JSON, install Klaxon and do:");
+        this.emitLine("//");
+        this.forEachTopLevel("none", (_, name) => {
+            this.emitLine("//   val ", modifySource(camelCase, name), " = ", name, ".fromJson(jsonString)");
         });
-      }
-    );
-  }
-
-  protected emitTopLevelMap(t: MapType, name: Name): void {
-    const elementType = this.kotlinType(t.values);
-    this.emitBlock(
-      [
-        "class ",
-        name,
-        "(elements: Map<String, ",
-        elementType,
-        ">) : HashMap<String, ",
-        elementType,
-        ">(elements)"
-      ],
-      () => {
-        this.emitLine("public fun toJson() = klaxon.toJsonString(this)");
-        this.ensureBlankLine();
-        this.emitBlock("companion object", () => {
-          this.emitBlock(
-            ["public fun fromJson(json: String) = ", name],
-            () => {
-              this.emitLine(
-                "klaxon.parseJsonObject(java.io.StringReader(json)) as Map<String, ",
-                elementType,
-                ">"
-              );
-            },
-            "paren"
-          );
-        });
-      }
-    );
-  }
-
-  private klaxonRenameAttribute(propName: Name, jsonName: string, ignore = false): Sourcelike | undefined {
-    const escapedName = stringEscape(jsonName);
-    const namesDiffer = this.sourcelikeToString(propName) !== escapedName;
-    const properties: Sourcelike[] = [];
-    if (namesDiffer) {
-      properties.push(['name = "', escapedName, '"']);
     }
-    if (ignore) {
-      properties.push("ignored = true");
-    }
-    return properties.length === 0 ? undefined : ["@Json(", arrayIntercalate(", ", properties), ")"];
-  }
 
-  protected emitEmptyClassDefinition(c: ClassType, className: Name): void {
-    this.emitDescription(this.descriptionForType(c));
+    protected emitHeader(): void {
+        super.emitHeader();
 
-    this.emitLine("typealias ", className, " = JsonObject");
-  }
+        this.emitLine("import com.beust.klaxon.*");
 
-  protected emitClassDefinitionMethods(c: ClassType, className: Name) {
-    const isTopLevel = iterableSome(this.topLevels, ([_, top]) => top === c);
-    if (isTopLevel) {
-      this.emitBlock(")", () => {
-        this.emitLine("public fun toJson() = klaxon.toJsonString(this)");
-        this.ensureBlankLine();
-        this.emitBlock("companion object", () => {
-          this.emitLine("public fun fromJson(json: String) = klaxon.parse<", className, ">(json)");
-        });
-      });
-    } else {
-      this.emitLine(")");
-    }
-  }
-
-  protected renameAttribute(name: Name, jsonName: string, _required: boolean, meta: Array<() => void>) {
-    const rename = this.klaxonRenameAttribute(name, jsonName);
-    if (rename !== undefined) {
-      meta.push(() => this.emitLine(rename));
-    }
-  }
-
-  protected emitEnumDefinition(e: EnumType, enumName: Name): void {
-    this.emitDescription(this.descriptionForType(e));
-
-    this.emitBlock(["enum class ", enumName, "(val value: String)"], () => {
-      let count = e.cases.size;
-      this.forEachEnumCase(e, "none", (name, json) => {
-        this.emitLine(name, `("${stringEscape(json)}")`, --count === 0 ? ";" : ",");
-      });
-      this.ensureBlankLine();
-      this.emitBlock("companion object", () => {
-        this.emitBlock(["public fun fromValue(value: String): ", enumName, " = when (value)"], () => {
-          let table: Sourcelike[][] = [];
-          this.forEachEnumCase(e, "none", (name, json) => {
-            table.push([[`"${stringEscape(json)}"`], [" -> ", name]]);
-          });
-          table.push([["else"], [" -> throw IllegalArgumentException()"]]);
-          this.emitTable(table);
-        });
-      });
-    });
-  }
-
-  private emitGenericConverter(): void {
-    this.ensureBlankLine();
-    this.emitLine(
-      "private fun <T> Klaxon.convert(k: kotlin.reflect.KClass<*>, fromJson: (JsonValue) -> T, toJson: (T) -> String, isUnion: Boolean = false) ="
-    );
-    this.indent(() => {
-      this.emitLine("this.converter(object: Converter {");
-      this.indent(() => {
-        this.emitLine(`@Suppress("UNCHECKED_CAST")`);
-        this.emitTable([
-          ["override fun toJson(value: Any)", " = toJson(value as T)"],
-          ["override fun fromJson(jv: JsonValue)", " = fromJson(jv) as Any"],
-          [
-            "override fun canConvert(cls: Class<*>)",
-            " = cls == k.java || (isUnion && cls.superclass == k.java)"
-          ]
-        ]);
-      });
-      this.emitLine("})");
-    });
-  }
-
-  protected emitUnionDefinitionMethods(
-    u: UnionType,
-    nonNulls: ReadonlySet<Type>,
-    maybeNull: PrimitiveType | null,
-    unionName: Name
-  ) {
-    this.ensureBlankLine();
-    this.emitLine("public fun toJson(): String = klaxon.toJsonString(when (this) {");
-    this.indent(() => {
-      let toJsonTable: Sourcelike[][] = [];
-      this.forEachUnionMember(u, nonNulls, "none", null, name => {
-        toJsonTable.push([["is ", name], [" -> this.value"]]);
-      });
-      if (maybeNull !== null) {
-        const name = this.nameForUnionMember(u, maybeNull);
-        toJsonTable.push([["is ", name], [' -> "null"']]);
-      }
-      this.emitTable(toJsonTable);
-    });
-    this.emitLine("})");
-    this.ensureBlankLine();
-    this.emitBlock("companion object", () => {
-      this.emitLine("public fun fromJson(jv: JsonValue): ", unionName, " = when (jv.inside) {");
-      this.indent(() => {
-        let table: Sourcelike[][] = [];
-        this.forEachUnionMember(u, nonNulls, "none", null, (name, t) => {
-          table.push([
-            [this.unionMemberJsonValueGuard(t, "jv.inside")],
-            [" -> ", name, "(", this.unionMemberFromJsonValue(t, "jv"), "!!)"]
-          ]);
-        });
-        if (maybeNull !== null) {
-          const name = this.nameForUnionMember(u, maybeNull);
-          table.push([[this.unionMemberJsonValueGuard(maybeNull, "jv.inside")], [" -> ", name, "()"]]);
+        const hasUnions = iterableSome(
+            this.typeGraph.allNamedTypes(),
+            t => t instanceof UnionType && nullableFromUnion(t) === null
+        );
+        const hasEmptyObjects = iterableSome(
+            this.typeGraph.allNamedTypes(),
+            c => c instanceof ClassType && c.getProperties().size === 0
+        );
+        if (hasUnions || this.haveEnums || hasEmptyObjects) {
+            this.emitGenericConverter();
         }
-        table.push([["else"], [" -> throw IllegalArgumentException()"]]);
-        this.emitTable(table);
-      });
-      this.emitLine("}");
-    });
-  }
+
+        let converters: Sourcelike[][] = [];
+        if (hasEmptyObjects) {
+            converters.push([[".convert(JsonObject::class,"], [" { it.obj!! },"], [" { it.toJsonString() })"]]);
+        }
+        this.forEachEnum("none", (_, name) => {
+            converters.push([
+                [".convert(", name, "::class,"],
+                [" { ", name, ".fromValue(it.string!!) },"],
+                [' { "\\"${it.value}\\"" })']
+            ]);
+        });
+        this.forEachUnion("none", (_, name) => {
+            converters.push([
+                [".convert(", name, "::class,"],
+                [" { ", name, ".fromJson(it) },"],
+                [" { it.toJson() }, true)"]
+            ]);
+        });
+
+        this.ensureBlankLine();
+        this.emitLine("private val klaxon = Klaxon()");
+        if (converters.length > 0) {
+            this.indent(() => this.emitTable(converters));
+        }
+    }
+
+    protected emitTopLevelArray(t: ArrayType, name: Name): void {
+        const elementType = this.kotlinType(t.items);
+        this.emitBlock(
+            ["class ", name, "(elements: Collection<", elementType, ">) : ArrayList<", elementType, ">(elements)"],
+            () => {
+                this.emitLine("public fun toJson() = klaxon.toJsonString(this)");
+                this.ensureBlankLine();
+                this.emitBlock("companion object", () => {
+                    this.emitLine(
+                        "public fun fromJson(json: String) = ",
+                        name,
+                        "(klaxon.parseArray<",
+                        elementType,
+                        ">(json)!!)"
+                    );
+                });
+            }
+        );
+    }
+
+    protected emitTopLevelMap(t: MapType, name: Name): void {
+        const elementType = this.kotlinType(t.values);
+        this.emitBlock(
+            [
+                "class ",
+                name,
+                "(elements: Map<String, ",
+                elementType,
+                ">) : HashMap<String, ",
+                elementType,
+                ">(elements)"
+            ],
+            () => {
+                this.emitLine("public fun toJson() = klaxon.toJsonString(this)");
+                this.ensureBlankLine();
+                this.emitBlock("companion object", () => {
+                    this.emitBlock(
+                        ["public fun fromJson(json: String) = ", name],
+                        () => {
+                            this.emitLine(
+                                "klaxon.parseJsonObject(java.io.StringReader(json)) as Map<String, ",
+                                elementType,
+                                ">"
+                            );
+                        },
+                        "paren"
+                    );
+                });
+            }
+        );
+    }
+
+    private klaxonRenameAttribute(propName: Name, jsonName: string, ignore = false): Sourcelike | undefined {
+        const escapedName = stringEscape(jsonName);
+        const namesDiffer = this.sourcelikeToString(propName) !== escapedName;
+        const properties: Sourcelike[] = [];
+        if (namesDiffer) {
+            properties.push(['name = "', escapedName, '"']);
+        }
+        if (ignore) {
+            properties.push("ignored = true");
+        }
+        return properties.length === 0 ? undefined : ["@Json(", arrayIntercalate(", ", properties), ")"];
+    }
+
+    protected emitEmptyClassDefinition(c: ClassType, className: Name): void {
+        this.emitDescription(this.descriptionForType(c));
+
+        this.emitLine("typealias ", className, " = JsonObject");
+    }
+
+    protected emitClassDefinitionMethods(c: ClassType, className: Name) {
+        const isTopLevel = iterableSome(this.topLevels, ([_, top]) => top === c);
+        if (isTopLevel) {
+            this.emitBlock(")", () => {
+                this.emitLine("public fun toJson() = klaxon.toJsonString(this)");
+                this.ensureBlankLine();
+                this.emitBlock("companion object", () => {
+                    this.emitLine("public fun fromJson(json: String) = klaxon.parse<", className, ">(json)");
+                });
+            });
+        } else {
+            this.emitLine(")");
+        }
+    }
+
+    protected renameAttribute(name: Name, jsonName: string, _required: boolean, meta: Array<() => void>) {
+        const rename = this.klaxonRenameAttribute(name, jsonName);
+        if (rename !== undefined) {
+            meta.push(() => this.emitLine(rename));
+        }
+    }
+
+    protected emitEnumDefinition(e: EnumType, enumName: Name): void {
+        this.emitDescription(this.descriptionForType(e));
+
+        this.emitBlock(["enum class ", enumName, "(val value: String)"], () => {
+            let count = e.cases.size;
+            this.forEachEnumCase(e, "none", (name, json) => {
+                this.emitLine(name, `("${stringEscape(json)}")`, --count === 0 ? ";" : ",");
+            });
+            this.ensureBlankLine();
+            this.emitBlock("companion object", () => {
+                this.emitBlock(["public fun fromValue(value: String): ", enumName, " = when (value)"], () => {
+                    let table: Sourcelike[][] = [];
+                    this.forEachEnumCase(e, "none", (name, json) => {
+                        table.push([[`"${stringEscape(json)}"`], [" -> ", name]]);
+                    });
+                    table.push([["else"], [" -> throw IllegalArgumentException()"]]);
+                    this.emitTable(table);
+                });
+            });
+        });
+    }
+
+    private emitGenericConverter(): void {
+        this.ensureBlankLine();
+        this.emitLine(
+            "private fun <T> Klaxon.convert(k: kotlin.reflect.KClass<*>, fromJson: (JsonValue) -> T, toJson: (T) -> String, isUnion: Boolean = false) ="
+        );
+        this.indent(() => {
+            this.emitLine("this.converter(object: Converter {");
+            this.indent(() => {
+                this.emitLine(`@Suppress("UNCHECKED_CAST")`);
+                this.emitTable([
+                    ["override fun toJson(value: Any)", " = toJson(value as T)"],
+                    ["override fun fromJson(jv: JsonValue)", " = fromJson(jv) as Any"],
+                    [
+                        "override fun canConvert(cls: Class<*>)",
+                        " = cls == k.java || (isUnion && cls.superclass == k.java)"
+                    ]
+                ]);
+            });
+            this.emitLine("})");
+        });
+    }
+
+    protected emitUnionDefinitionMethods(
+        u: UnionType,
+        nonNulls: ReadonlySet<Type>,
+        maybeNull: PrimitiveType | null,
+        unionName: Name
+    ) {
+        this.ensureBlankLine();
+        this.emitLine("public fun toJson(): String = klaxon.toJsonString(when (this) {");
+        this.indent(() => {
+            let toJsonTable: Sourcelike[][] = [];
+            this.forEachUnionMember(u, nonNulls, "none", null, name => {
+                toJsonTable.push([["is ", name], [" -> this.value"]]);
+            });
+            if (maybeNull !== null) {
+                const name = this.nameForUnionMember(u, maybeNull);
+                toJsonTable.push([["is ", name], [' -> "null"']]);
+            }
+            this.emitTable(toJsonTable);
+        });
+        this.emitLine("})");
+        this.ensureBlankLine();
+        this.emitBlock("companion object", () => {
+            this.emitLine("public fun fromJson(jv: JsonValue): ", unionName, " = when (jv.inside) {");
+            this.indent(() => {
+                let table: Sourcelike[][] = [];
+                this.forEachUnionMember(u, nonNulls, "none", null, (name, t) => {
+                    table.push([
+                        [this.unionMemberJsonValueGuard(t, "jv.inside")],
+                        [" -> ", name, "(", this.unionMemberFromJsonValue(t, "jv"), "!!)"]
+                    ]);
+                });
+                if (maybeNull !== null) {
+                    const name = this.nameForUnionMember(u, maybeNull);
+                    table.push([[this.unionMemberJsonValueGuard(maybeNull, "jv.inside")], [" -> ", name, "()"]]);
+                }
+                table.push([["else"], [" -> throw IllegalArgumentException()"]]);
+                this.emitTable(table);
+            });
+            this.emitLine("}");
+        });
+    }
 }
 
 export class KotlinJacksonRenderer extends KotlinRenderer {
-  constructor(
-    targetLanguage: TargetLanguage,
-    renderContext: RenderContext,
-    _kotlinOptions: OptionValues<typeof kotlinOptions>
-  ) {
-    super(targetLanguage, renderContext, _kotlinOptions);
-  }
+    constructor(
+        targetLanguage: TargetLanguage,
+        renderContext: RenderContext,
+        _kotlinOptions: OptionValues<typeof kotlinOptions>
+    ) {
+        super(targetLanguage, renderContext, _kotlinOptions);
+    }
 
-  private unionMemberJsonValueGuard(t: Type, _e: Sourcelike): Sourcelike {
-    return matchType<Sourcelike>(
-      t,
-      _anyType => "is Any",
-      _nullType => "null",
-      _boolType => "is BooleanNode",
-      _integerType => "is IntNode, is LongNode",
-      _doubleType => "is DoubleNode",
-      _stringType => "is TextNode",
-      _arrayType => "is ArrayNode",
-      // These could be stricter, but for now we don't allow maps
-      // and objects in the same union
-      _classType => "is ObjectNode",
-      _mapType => "is ObjectNode",
-      // This could be stricter, but for now we don't allow strings
-      // and enums in the same union
-      _enumType => "is TextNode",
-      _unionType => mustNotHappen()
-    );
-  }
+    private unionMemberJsonValueGuard(t: Type, _e: Sourcelike): Sourcelike {
+        return matchType<Sourcelike>(
+            t,
+            _anyType => "is Any",
+            _nullType => "null",
+            _boolType => "is BooleanNode",
+            _integerType => "is IntNode, is LongNode",
+            _doubleType => "is DoubleNode",
+            _stringType => "is TextNode",
+            _arrayType => "is ArrayNode",
+            // These could be stricter, but for now we don't allow maps
+            // and objects in the same union
+            _classType => "is ObjectNode",
+            _mapType => "is ObjectNode",
+            // This could be stricter, but for now we don't allow strings
+            // and enums in the same union
+            _enumType => "is TextNode",
+            _unionType => mustNotHappen()
+        );
+    }
 
-  protected emitUsageHeader(): void {
-    this.emitLine("// To parse the JSON, install jackson-module-kotlin and do:");
-    this.emitLine("//");
-    this.forEachTopLevel("none", (_, name) => {
-      this.emitLine("//   val ", modifySource(camelCase, name), " = ", name, ".fromJson(jsonString)");
-    });
-  }
+    protected emitUsageHeader(): void {
+        this.emitLine("// To parse the JSON, install jackson-module-kotlin and do:");
+        this.emitLine("//");
+        this.forEachTopLevel("none", (_, name) => {
+            this.emitLine("//   val ", modifySource(camelCase, name), " = ", name, ".fromJson(jsonString)");
+        });
+    }
 
-  protected emitHeader(): void {
-    super.emitHeader();
+    protected emitHeader(): void {
+        super.emitHeader();
 
-    this.emitMultiline(`import com.fasterxml.jackson.annotation.*
+        this.emitMultiline(`import com.fasterxml.jackson.annotation.*
 import com.fasterxml.jackson.core.*
 import com.fasterxml.jackson.databind.*
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer
@@ -796,171 +791,171 @@ import com.fasterxml.jackson.databind.node.*
 import com.fasterxml.jackson.databind.ser.std.StdSerializer
 import com.fasterxml.jackson.module.kotlin.*`);
 
-    const hasUnions = iterableSome(
-      this.typeGraph.allNamedTypes(),
-      t => t instanceof UnionType && nullableFromUnion(t) === null
-    );
-    const hasEmptyObjects = iterableSome(
-      this.typeGraph.allNamedTypes(),
-      c => c instanceof ClassType && c.getProperties().size === 0
-    );
-    if (hasUnions || this.haveEnums || hasEmptyObjects) {
-      this.emitGenericConverter();
-    }
+        const hasUnions = iterableSome(
+            this.typeGraph.allNamedTypes(),
+            t => t instanceof UnionType && nullableFromUnion(t) === null
+        );
+        const hasEmptyObjects = iterableSome(
+            this.typeGraph.allNamedTypes(),
+            c => c instanceof ClassType && c.getProperties().size === 0
+        );
+        if (hasUnions || this.haveEnums || hasEmptyObjects) {
+            this.emitGenericConverter();
+        }
 
-    let converters: Sourcelike[][] = [];
-    // if (hasEmptyObjects) {
-    //     converters.push([["convert(JsonNode::class,"], [" { it },"], [" { writeValueAsString(it) })"]]);
-    // }
-    this.forEachEnum("none", (_, name) => {
-      converters.push([
-        ["convert(", name, "::class,"],
-        [" { ", name, ".fromValue(it.asText()) },"],
-        [' { "\\"${it.value}\\"" })']
-      ]);
-    });
-    this.forEachUnion("none", (_, name) => {
-      converters.push([
-        ["convert(", name, "::class,"],
-        [" { ", name, ".fromJson(it) },"],
-        [" { it.toJson() }, true)"]
-      ]);
-    });
+        let converters: Sourcelike[][] = [];
+        // if (hasEmptyObjects) {
+        //     converters.push([["convert(JsonNode::class,"], [" { it },"], [" { writeValueAsString(it) })"]]);
+        // }
+        this.forEachEnum("none", (_, name) => {
+            converters.push([
+                ["convert(", name, "::class,"],
+                [" { ", name, ".fromValue(it.asText()) },"],
+                [' { "\\"${it.value}\\"" })']
+            ]);
+        });
+        this.forEachUnion("none", (_, name) => {
+            converters.push([
+                ["convert(", name, "::class,"],
+                [" { ", name, ".fromJson(it) },"],
+                [" { it.toJson() }, true)"]
+            ]);
+        });
 
-    this.ensureBlankLine();
-    this.emitLine("val mapper = jacksonObjectMapper().apply {");
-    this.indent(() => {
-      this.emitLine("propertyNamingStrategy = PropertyNamingStrategy.LOWER_CAMEL_CASE");
-      this.emitLine("setSerializationInclusion(JsonInclude.Include.NON_NULL)");
-    });
-
-    if (converters.length > 0) {
-      this.indent(() => this.emitTable(converters));
-    }
-
-    this.emitLine("}");
-  }
-
-  protected emitTopLevelArray(t: ArrayType, name: Name): void {
-    const elementType = this.kotlinType(t.items);
-    this.emitBlock(
-      ["class ", name, "(elements: Collection<", elementType, ">) : ArrayList<", elementType, ">(elements)"],
-      () => {
-        this.emitLine("fun toJson() = mapper.writeValueAsString(this)");
         this.ensureBlankLine();
-        this.emitBlock("companion object", () => {
-          this.emitLine("fun fromJson(json: String) = mapper.readValue<", name, ">(json)");
+        this.emitLine("val mapper = jacksonObjectMapper().apply {");
+        this.indent(() => {
+            this.emitLine("propertyNamingStrategy = PropertyNamingStrategy.LOWER_CAMEL_CASE");
+            this.emitLine("setSerializationInclusion(JsonInclude.Include.NON_NULL)");
         });
-      }
-    );
-  }
 
-  protected emitTopLevelMap(t: MapType, name: Name): void {
-    const elementType = this.kotlinType(t.values);
-    this.emitBlock(
-      [
-        "class ",
-        name,
-        "(elements: Map<String, ",
-        elementType,
-        ">) : HashMap<String, ",
-        elementType,
-        ">(elements)"
-      ],
-      () => {
-        this.emitLine("fun toJson() = mapper.writeValueAsString(this)");
+        if (converters.length > 0) {
+            this.indent(() => this.emitTable(converters));
+        }
+
+        this.emitLine("}");
+    }
+
+    protected emitTopLevelArray(t: ArrayType, name: Name): void {
+        const elementType = this.kotlinType(t.items);
+        this.emitBlock(
+            ["class ", name, "(elements: Collection<", elementType, ">) : ArrayList<", elementType, ">(elements)"],
+            () => {
+                this.emitLine("fun toJson() = mapper.writeValueAsString(this)");
+                this.ensureBlankLine();
+                this.emitBlock("companion object", () => {
+                    this.emitLine("fun fromJson(json: String) = mapper.readValue<", name, ">(json)");
+                });
+            }
+        );
+    }
+
+    protected emitTopLevelMap(t: MapType, name: Name): void {
+        const elementType = this.kotlinType(t.values);
+        this.emitBlock(
+            [
+                "class ",
+                name,
+                "(elements: Map<String, ",
+                elementType,
+                ">) : HashMap<String, ",
+                elementType,
+                ">(elements)"
+            ],
+            () => {
+                this.emitLine("fun toJson() = mapper.writeValueAsString(this)");
+                this.ensureBlankLine();
+                this.emitBlock("companion object", () => {
+                    this.emitLine("fun fromJson(json: String) = mapper.readValue<", name, ">(json)");
+                });
+            }
+        );
+    }
+
+    private jacksonRenameAttribute(
+        propName: Name,
+        jsonName: string,
+        required: boolean,
+        ignore = false
+    ): Sourcelike | undefined {
+        const escapedName = stringEscape(jsonName);
+        const namesDiffer = this.sourcelikeToString(propName) !== escapedName;
+        const properties: Sourcelike[] = [];
+        const isPrefixBool = jsonName.startsWith("is"); // https://github.com/FasterXML/jackson-module-kotlin/issues/80
+        const propertyOpts: Sourcelike[] = [];
+
+        if (namesDiffer || isPrefixBool) {
+            propertyOpts.push('"' + escapedName + '"');
+        }
+        if (required) {
+            propertyOpts.push("required=true");
+        }
+
+        if (propertyOpts.length > 0) {
+            properties.push(["@get:JsonProperty(", arrayIntercalate(", ", propertyOpts), ")"]);
+            properties.push(["@field:JsonProperty(", arrayIntercalate(", ", propertyOpts), ")"]);
+        }
+
+        if (ignore) {
+            properties.push("@get:JsonIgnore");
+            properties.push("@field:JsonIgnore");
+        }
+        return properties.length === 0 ? undefined : properties;
+    }
+
+    protected emitEmptyClassDefinition(c: ClassType, className: Name): void {
+        this.emitDescription(this.descriptionForType(c));
+
+        this.emitLine("typealias ", className, " = JsonNode");
+    }
+
+    protected emitClassDefinitionMethods(c: ClassType, className: Name) {
+        const isTopLevel = iterableSome(this.topLevels, ([_, top]) => top === c);
+        if (isTopLevel) {
+            this.emitBlock(")", () => {
+                this.emitLine("fun toJson() = mapper.writeValueAsString(this)");
+                this.ensureBlankLine();
+                this.emitBlock("companion object", () => {
+                    this.emitLine("fun fromJson(json: String) = mapper.readValue<", className, ">(json)");
+                });
+            });
+        } else {
+            this.emitLine(")");
+        }
+    }
+
+    protected renameAttribute(name: Name, jsonName: string, required: boolean, meta: Array<() => void>) {
+        const rename = this.jacksonRenameAttribute(name, jsonName, required);
+        if (rename !== undefined) {
+            meta.push(() => this.emitLine(rename));
+        }
+    }
+
+    protected emitEnumDefinition(e: EnumType, enumName: Name): void {
+        this.emitDescription(this.descriptionForType(e));
+
+        this.emitBlock(["enum class ", enumName, "(val value: String)"], () => {
+            let count = e.cases.size;
+            this.forEachEnumCase(e, "none", (name, json) => {
+                this.emitLine(name, `("${stringEscape(json)}")`, --count === 0 ? ";" : ",");
+            });
+            this.ensureBlankLine();
+            this.emitBlock("companion object", () => {
+                this.emitBlock(["fun fromValue(value: String): ", enumName, " = when (value)"], () => {
+                    let table: Sourcelike[][] = [];
+                    this.forEachEnumCase(e, "none", (name, json) => {
+                        table.push([[`"${stringEscape(json)}"`], [" -> ", name]]);
+                    });
+                    table.push([["else"], [" -> throw IllegalArgumentException()"]]);
+                    this.emitTable(table);
+                });
+            });
+        });
+    }
+
+    private emitGenericConverter(): void {
         this.ensureBlankLine();
-        this.emitBlock("companion object", () => {
-          this.emitLine("fun fromJson(json: String) = mapper.readValue<", name, ">(json)");
-        });
-      }
-    );
-  }
-
-  private jacksonRenameAttribute(
-    propName: Name,
-    jsonName: string,
-    required: boolean,
-    ignore = false
-  ): Sourcelike | undefined {
-    const escapedName = stringEscape(jsonName);
-    const namesDiffer = this.sourcelikeToString(propName) !== escapedName;
-    const properties: Sourcelike[] = [];
-    const isPrefixBool = jsonName.startsWith("is"); // https://github.com/FasterXML/jackson-module-kotlin/issues/80
-    const propertyOpts: Sourcelike[] = [];
-
-    if (namesDiffer || isPrefixBool) {
-      propertyOpts.push('"' + escapedName + '"');
-    }
-    if (required) {
-      propertyOpts.push("required=true");
-    }
-
-    if (propertyOpts.length > 0) {
-      properties.push(["@get:JsonProperty(", arrayIntercalate(", ", propertyOpts), ")"]);
-      properties.push(["@field:JsonProperty(", arrayIntercalate(", ", propertyOpts), ")"]);
-    }
-
-    if (ignore) {
-      properties.push("@get:JsonIgnore");
-      properties.push("@field:JsonIgnore");
-    }
-    return properties.length === 0 ? undefined : properties;
-  }
-
-  protected emitEmptyClassDefinition(c: ClassType, className: Name): void {
-    this.emitDescription(this.descriptionForType(c));
-
-    this.emitLine("typealias ", className, " = JsonNode");
-  }
-
-  protected emitClassDefinitionMethods(c: ClassType, className: Name) {
-    const isTopLevel = iterableSome(this.topLevels, ([_, top]) => top === c);
-    if (isTopLevel) {
-      this.emitBlock(")", () => {
-        this.emitLine("fun toJson() = mapper.writeValueAsString(this)");
-        this.ensureBlankLine();
-        this.emitBlock("companion object", () => {
-          this.emitLine("fun fromJson(json: String) = mapper.readValue<", className, ">(json)");
-        });
-      });
-    } else {
-      this.emitLine(")");
-    }
-  }
-
-  protected renameAttribute(name: Name, jsonName: string, required: boolean, meta: Array<() => void>) {
-    const rename = this.jacksonRenameAttribute(name, jsonName, required);
-    if (rename !== undefined) {
-      meta.push(() => this.emitLine(rename));
-    }
-  }
-
-  protected emitEnumDefinition(e: EnumType, enumName: Name): void {
-    this.emitDescription(this.descriptionForType(e));
-
-    this.emitBlock(["enum class ", enumName, "(val value: String)"], () => {
-      let count = e.cases.size;
-      this.forEachEnumCase(e, "none", (name, json) => {
-        this.emitLine(name, `("${stringEscape(json)}")`, --count === 0 ? ";" : ",");
-      });
-      this.ensureBlankLine();
-      this.emitBlock("companion object", () => {
-        this.emitBlock(["fun fromValue(value: String): ", enumName, " = when (value)"], () => {
-          let table: Sourcelike[][] = [];
-          this.forEachEnumCase(e, "none", (name, json) => {
-            table.push([[`"${stringEscape(json)}"`], [" -> ", name]]);
-          });
-          table.push([["else"], [" -> throw IllegalArgumentException()"]]);
-          this.emitTable(table);
-        });
-      });
-    });
-  }
-
-  private emitGenericConverter(): void {
-    this.ensureBlankLine();
-    this.emitMultiline(`
+        this.emitMultiline(`
 @Suppress("UNCHECKED_CAST")
 private fun <T> ObjectMapper.convert(k: kotlin.reflect.KClass<*>, fromJson: (JsonNode) -> T, toJson: (T) -> String, isUnion: Boolean = false) = registerModule(SimpleModule().apply {
     addSerializer(k.java as Class<T>, object : StdSerializer<T>(k.java as Class<T>) {
@@ -970,46 +965,46 @@ private fun <T> ObjectMapper.convert(k: kotlin.reflect.KClass<*>, fromJson: (Jso
         override fun deserialize(p: JsonParser, ctxt: DeserializationContext) = fromJson(p.readValueAsTree())
     })
 })`);
-  }
+    }
 
-  protected emitUnionDefinitionMethods(
-    u: UnionType,
-    nonNulls: ReadonlySet<Type>,
-    maybeNull: PrimitiveType | null,
-    unionName: Name
-  ) {
-    this.ensureBlankLine();
-    this.emitLine("fun toJson(): String = mapper.writeValueAsString(when (this) {");
-    this.indent(() => {
-      let toJsonTable: Sourcelike[][] = [];
-      this.forEachUnionMember(u, nonNulls, "none", null, name => {
-        toJsonTable.push([["is ", name], [" -> this.value"]]);
-      });
-      if (maybeNull !== null) {
-        const name = this.nameForUnionMember(u, maybeNull);
-        toJsonTable.push([["is ", name], [' -> "null"']]);
-      }
-      this.emitTable(toJsonTable);
-    });
-    this.emitLine("})");
-    this.ensureBlankLine();
-    this.emitBlock("companion object", () => {
-      this.emitLine("fun fromJson(jn: JsonNode): ", unionName, " = when (jn) {");
-      this.indent(() => {
-        let table: Sourcelike[][] = [];
-        this.forEachUnionMember(u, nonNulls, "none", null, (name, t) => {
-          table.push([[this.unionMemberJsonValueGuard(t, "jn")], [" -> ", name, "(mapper.treeToValue(jn))"]]);
+    protected emitUnionDefinitionMethods(
+        u: UnionType,
+        nonNulls: ReadonlySet<Type>,
+        maybeNull: PrimitiveType | null,
+        unionName: Name
+    ) {
+        this.ensureBlankLine();
+        this.emitLine("fun toJson(): String = mapper.writeValueAsString(when (this) {");
+        this.indent(() => {
+            let toJsonTable: Sourcelike[][] = [];
+            this.forEachUnionMember(u, nonNulls, "none", null, name => {
+                toJsonTable.push([["is ", name], [" -> this.value"]]);
+            });
+            if (maybeNull !== null) {
+                const name = this.nameForUnionMember(u, maybeNull);
+                toJsonTable.push([["is ", name], [' -> "null"']]);
+            }
+            this.emitTable(toJsonTable);
         });
-        if (maybeNull !== null) {
-          const name = this.nameForUnionMember(u, maybeNull);
-          table.push([[this.unionMemberJsonValueGuard(maybeNull, "jn")], [" -> ", name, "()"]]);
-        }
-        table.push([["else"], [" -> throw IllegalArgumentException()"]]);
-        this.emitTable(table);
-      });
-      this.emitLine("}");
-    });
-  }
+        this.emitLine("})");
+        this.ensureBlankLine();
+        this.emitBlock("companion object", () => {
+            this.emitLine("fun fromJson(jn: JsonNode): ", unionName, " = when (jn) {");
+            this.indent(() => {
+                let table: Sourcelike[][] = [];
+                this.forEachUnionMember(u, nonNulls, "none", null, (name, t) => {
+                    table.push([[this.unionMemberJsonValueGuard(t, "jn")], [" -> ", name, "(mapper.treeToValue(jn))"]]);
+                });
+                if (maybeNull !== null) {
+                    const name = this.nameForUnionMember(u, maybeNull);
+                    table.push([[this.unionMemberJsonValueGuard(maybeNull, "jn")], [" -> ", name, "()"]]);
+                }
+                table.push([["else"], [" -> throw IllegalArgumentException()"]]);
+                this.emitTable(table);
+            });
+            this.emitLine("}");
+        });
+    }
 }
 
 /**
@@ -1017,203 +1012,159 @@ private fun <T> ObjectMapper.convert(k: kotlin.reflect.KClass<*>, fromJson: (Jso
  * TODO: Union, Any, Top Level Array, Top Level Map
  */
 export class KotlinXRenderer extends KotlinRenderer {
-  constructor(
-    targetLanguage: TargetLanguage,
-    renderContext: RenderContext,
-    _kotlinOptions: OptionValues<typeof kotlinOptions>
-  ) {
-    super(targetLanguage, renderContext, _kotlinOptions);
-  }
-
-  protected anySourceType(optional: string): Sourcelike {
-    return ["JsonElement", optional];
-  }
-
-  protected arrayType(arrayType: ArrayType, withIssues = false, noOptional = false): Sourcelike {
-    const valType = this.kotlinType(arrayType.items, withIssues, true);
-    const name = this.sourcelikeToString(valType);
-    if (name === "JsonObject" || name === "JsonElement") {
-      return "JsonArray";
+    constructor(
+        targetLanguage: TargetLanguage,
+        renderContext: RenderContext,
+        _kotlinOptions: OptionValues<typeof kotlinOptions>
+    ) {
+        super(targetLanguage, renderContext, _kotlinOptions);
     }
-    return super.arrayType(arrayType, withIssues, noOptional);
-  }
 
-  protected mapType(mapType: MapType, withIssues = false, noOptional = false): Sourcelike {
-    const valType = this.kotlinType(mapType.values, withIssues, true);
-    const name = this.sourcelikeToString(valType);
-    if (name === "JsonObject" || name === "JsonElement") {
-      return "JsonObject";
+    protected anySourceType(optional: string): Sourcelike {
+        return ["JsonElement", optional];
     }
-    return super.mapType(mapType, withIssues, noOptional);
-  }
 
-  protected emitTopLevelMap(t: MapType, name: Name): void {
-    const elementType = this.kotlinType(t.values);
-    if (elementType === "JsonObject") {
-      this.emitLine(["typealias ", name, " = JsonObject"]);
-    } else {
-      super.emitTopLevelMap(t, name);
+    protected arrayType(arrayType: ArrayType, withIssues = false, noOptional = false): Sourcelike {
+        const valType = this.kotlinType(arrayType.items, withIssues, true);
+        const name = this.sourcelikeToString(valType);
+        if (name === "JsonObject" || name === "JsonElement") {
+            return "JsonArray";
+        }
+        return super.arrayType(arrayType, withIssues, noOptional);
     }
-  }
 
-  protected emitTopLevelArray(t: ArrayType, name: Name): void {
-    const elementType = this.kotlinType(t.items);
-    this.emitLine(["typealias ", name, " = JsonArray<", elementType, ">"]);
-  }
-
-  protected emitUsageHeader(): void {
-    this.emitLine("// To parse the JSON, install kotlin's serialization plugin and do:");
-    this.emitLine("//");
-    const table: Sourcelike[][] = [];
-    table.push(["// val ", "json", " = Json { allowStructuredMapKeys = true }"]);
-    this.forEachTopLevel("none", (_, name) => {
-      table.push([
-        "// val ",
-        modifySource(camelCase, name),
-        ` = json.parse(${this.sourcelikeToString(name)}.serializer(), jsonString)`
-      ]);
-    });
-    this.emitTable(table);
-  }
-
-  protected emitHeader(): void {
-    super.emitHeader();
-
-    this.emitLine("import kotlinx.serialization.*");
-    this.emitLine("import kotlinx.serialization.json.*");
-    this.emitLine("import kotlinx.serialization.descriptors.*");
-    this.emitLine("import kotlinx.serialization.encoding.*");
-  }
-
-  protected emitClassAnnotations(_c: Type, _className: Name) {
-    this.emitLine("@Serializable");
-  }
-
-  protected renameAttribute(name: Name, jsonName: string, _required: boolean, meta: Array<() => void>) {
-    const rename = this._rename(name, jsonName);
-    if (rename !== undefined) {
-      meta.push(() => this.emitLine(rename));
+    protected mapType(mapType: MapType, withIssues = false, noOptional = false): Sourcelike {
+        const valType = this.kotlinType(mapType.values, withIssues, true);
+        const name = this.sourcelikeToString(valType);
+        if (name === "JsonObject" || name === "JsonElement") {
+            return "JsonObject";
+        }
+        return super.mapType(mapType, withIssues, noOptional);
     }
-  }
 
-  private _rename(propName: Name, jsonName: string): Sourcelike | undefined {
-    const escapedName = stringEscape(jsonName);
-    const namesDiffer = this.sourcelikeToString(propName) !== escapedName;
-    if (namesDiffer) {
-      return ['@SerialName("', escapedName, '")'];
+    protected emitTopLevelMap(t: MapType, name: Name): void {
+        const elementType = this.kotlinType(t.values);
+        if (elementType === "JsonObject") {
+            this.emitLine(["typealias ", name, " = JsonObject"]);
+        } else {
+            super.emitTopLevelMap(t, name);
+        }
     }
-    return undefined;
-  }
 
-  protected emitEnumDefinition(e: EnumType, enumName: Name): void {
-    this.emitDescription(this.descriptionForType(e));
+    protected emitTopLevelArray(t: ArrayType, name: Name): void {
+        const elementType = this.kotlinType(t.items);
+        this.emitLine(["typealias ", name, " = JsonArray<", elementType, ">"]);
+    }
 
-    this.emitLine(["@Serializable"]);
-    this.emitBlock(["enum class ", enumName, "(val value: String)"], () => {
-      let count = e.cases.size;
-      this.forEachEnumCase(e, "none", (name, json) => {
-        const jsonEnum = stringEscape(json);
-        this.emitLine(`@SerialName("${jsonEnum}") `, name, `("${jsonEnum}")`, --count === 0 ? ";" : ",");
-      });
-    });
-  }
+    protected emitUsageHeader(): void {
+        this.emitLine("// To parse the JSON, install kotlin's serialization plugin and do:");
+        this.emitLine("//");
+        const table: Sourcelike[][] = [];
+        table.push(["// val ", "json", " = Json { allowStructuredMapKeys = true }"]);
+        this.forEachTopLevel("none", (_, name) => {
+            table.push([
+                "// val ",
+                modifySource(camelCase, name),
+                ` = json.parse(${this.sourcelikeToString(name)}.serializer(), jsonString)`
+            ]);
+        });
+        this.emitTable(table);
+    }
+
+    protected emitHeader(): void {
+        super.emitHeader();
+
+        this.emitLine("import kotlinx.serialization.*");
+        this.emitLine("import kotlinx.serialization.json.*");
+        this.emitLine("import kotlinx.serialization.descriptors.*");
+        this.emitLine("import kotlinx.serialization.encoding.*");
+    }
+
+    protected emitClassAnnotations(_c: Type, _className: Name) {
+        this.emitLine("@Serializable");
+    }
+
+    protected renameAttribute(name: Name, jsonName: string, _required: boolean, meta: Array<() => void>) {
+        const rename = this._rename(name, jsonName);
+        if (rename !== undefined) {
+            meta.push(() => this.emitLine(rename));
+        }
+    }
+
+    private _rename(propName: Name, jsonName: string): Sourcelike | undefined {
+        const escapedName = stringEscape(jsonName);
+        const namesDiffer = this.sourcelikeToString(propName) !== escapedName;
+        if (namesDiffer) {
+            return ['@SerialName("', escapedName, '")'];
+        }
+        return undefined;
+    }
+
+    protected emitEnumDefinition(e: EnumType, enumName: Name): void {
+        this.emitDescription(this.descriptionForType(e));
+
+        this.emitLine(["@Serializable"]);
+        this.emitBlock(["enum class ", enumName, "(val value: String)"], () => {
+            let count = e.cases.size;
+            this.forEachEnumCase(e, "none", (name, json) => {
+                const jsonEnum = stringEscape(json);
+                this.emitLine(`@SerialName("${jsonEnum}") `, name, `("${jsonEnum}")`, --count === 0 ? ";" : ",");
+            });
+        });
+    }
 }
 
 
 export class KotlinMoshiRenderer extends KotlinRenderer {
-  constructor(
-    targetLanguage: TargetLanguage,
-    renderContext: RenderContext,
-    _kotlinOptions: OptionValues<typeof kotlinOptions>
-  ) {
-    super(targetLanguage, renderContext, _kotlinOptions);
-  }
-
-  protected anySourceType(optional: string): Sourcelike {
-    return ["Any", optional];
-  }
-
-  protected emitHeader(): void {
-    super.emitHeader();
-
-    this.emitLine("import com.squareup.moshi.JsonClass");
-    this.emitLine("import com.squareup.moshi.Json");
-  }
-
-  protected emitClassAnnotations(_c: Type, _className: Name) {
-    this.emitLine("@JsonClass(generateAdapter = true)");
-  }
-
-  protected emitEnumDefinition(e: EnumType, enumName: Name): void {
-    this.emitDescription(this.descriptionForType(e));
-
-    this.emitLine(["@JsonClass(generateAdapter = false)"]);
-    this.emitBlock(["enum class ", enumName, "(val value: String)"], () => {
-      let count = e.cases.size;
-      this.forEachEnumCase(e, "none", (name, json) => {
-        const jsonEnum = stringEscape(json);
-        this.emitLine(`@Json(name = "${jsonEnum}") `, name, `("${jsonEnum}")`, --count === 0 ? ";" : ",");
-      });
-    });
-  }
-
-  protected renameAttribute(name: Name, jsonName: string, _required: boolean, meta: Array<() => void>) {
-    const rename = this._rename(name, jsonName);
-    if (rename !== undefined) {
-      meta.push(() => this.emitLine(rename));
+    constructor(
+        targetLanguage: TargetLanguage,
+        renderContext: RenderContext,
+        _kotlinOptions: OptionValues<typeof kotlinOptions>
+    ) {
+        super(targetLanguage, renderContext, _kotlinOptions);
     }
-  }
 
-  private _rename(propName: Name, jsonName: string): Sourcelike | undefined {
-    const escapedName = stringEscape(jsonName);
-    const namesDiffer = this.sourcelikeToString(propName) !== escapedName;
-    if (namesDiffer) {
-      return ['@Json(name = "', escapedName, '")'];
+    protected anySourceType(optional: string): Sourcelike {
+        return ["Any", optional];
     }
-    return undefined;
-  }
-}
 
+    protected emitHeader(): void {
+        super.emitHeader();
 
-function tokenize(text: string): string {
-  text = text.toLowerCase();
-  const tokens = [];
-
-  while (text.length > 0) {
-    let found = false;
-    // 尝试匹配自定义词汇表中的词汇
-    for (let i = text.length; i > 0; i--) {
-      if (custom_dic.has(text.slice(-i))) {
-        tokens.unshift(text.slice(-i));
-        text = text.slice(0, -i);
-        found = true;
-        break;
-      }
+        this.emitLine("import com.squareup.moshi.JsonClass");
+        this.emitLine("import com.squareup.moshi.Json");
     }
-    // 如果不包含自定义词汇，则使用最大匹配算法
-    if (!found) {
-      for (let j = Math.min(text.length, 10); j > 0; j--) {
-        if (words.has(text.slice(-j))) {
-          tokens.unshift(text.slice(-j));
-          text = text.slice(0, -j);
-          break;
+
+    protected emitClassAnnotations(_c: Type, _className: Name) {
+        this.emitLine("@JsonClass(generateAdapter = true)");
+    }
+
+    protected emitEnumDefinition(e: EnumType, enumName: Name): void {
+        this.emitDescription(this.descriptionForType(e));
+
+        this.emitLine(["@JsonClass(generateAdapter = false)"]);
+        this.emitBlock(["enum class ", enumName, "(val value: String)"], () => {
+            let count = e.cases.size;
+            this.forEachEnumCase(e, "none", (name, json) => {
+                const jsonEnum = stringEscape(json);
+                this.emitLine(`@Json(name = "${jsonEnum}") `, name, `("${jsonEnum}")`, --count === 0 ? ";" : ",");
+            });
+        });
+    }
+
+    protected renameAttribute(name: Name, jsonName: string, _required: boolean, meta: Array<() => void>) {
+        const rename = this._rename(name, jsonName);
+        if (rename !== undefined) {
+            meta.push(() => this.emitLine(rename));
         }
-        if (j === 1) {
-          tokens.unshift(text.charAt(text.length - 1));
-          text = text.slice(0, -1);
-        }
-      }
     }
-  }
-  return toCamelCase(tokens);
-}
 
-function toCamelCase(components: string[]): string {
-  // 将除首个单词外的单词首字母大写
-  return components[0] + components.slice(1).map(x => x.charAt(0).toUpperCase() + x.slice(1)).join('');
-}
-
-// 首字母大写
-function upperFirst(str: string): string {
-  return str.charAt(0).toUpperCase() + str.slice(1);
+    private _rename(propName: Name, jsonName: string): Sourcelike | undefined {
+        const escapedName = stringEscape(jsonName);
+        const namesDiffer = this.sourcelikeToString(propName) !== escapedName;
+        if (namesDiffer) {
+            return ['@Json(name = "', escapedName, '")'];
+        }
+        return undefined;
+    }
 }
