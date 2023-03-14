@@ -96,7 +96,7 @@ function getTargetLanguageOptions(inputData, targetLanguage) {
                 inputData: inputData,
                 lang: retTargetLanguage,
                 rendererOptions: {
-                    framework: 'just-types',
+                    framework: 'moshi',
                 }
             }
             break
