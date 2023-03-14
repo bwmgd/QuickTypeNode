@@ -42,7 +42,8 @@ export enum Framework {
     None,
     Jackson,
     Klaxon,
-    KotlinX
+    KotlinX,
+    Moshi
 }
 
 export const kotlinOptions = {
@@ -53,7 +54,8 @@ export const kotlinOptions = {
             ["just-types", Framework.None],
             ["jackson", Framework.Jackson],
             ["klaxon", Framework.Klaxon],
-            ["kotlinx", Framework.KotlinX]
+            ["kotlinx", Framework.KotlinX],
+            ["moshi", Framework.Moshi]
         ],
         "klaxon"
     ),
@@ -93,6 +95,8 @@ export class KotlinTargetLanguage extends TargetLanguage {
                 return new KotlinKlaxonRenderer(this, renderContext, options);
             case Framework.KotlinX:
                 return new KotlinXRenderer(this, renderContext, options);
+            case Framework.Moshi:
+                return new KotlinMoshiRenderer(this, renderContext, options);
             default:
                 return assertNever(options.framework);
         }
@@ -291,14 +295,14 @@ export class KotlinRenderer extends ConvenienceRenderer {
     }
 
     protected emitHeader(): void {
-        this.emitLine("// YApi QuickType插件生成，具体参考文档:https://plugins.jetbrains.com/plugin/18847-yapi-quicktype/documentation")
-        if (this.leadingComments !== undefined) {
-            this.emitCommentLines(this.leadingComments);
-        } else {
-            this.emitUsageHeader();
-        }
-
-        this.ensureBlankLine();
+        // this.emitLine("//YApi QuickType插件生成，具体参考文档:https://github.com/RmondJone/YapiQuickType")
+        // if (this.leadingComments !== undefined) {
+        //     this.emitCommentLines(this.leadingComments);
+        // } else {
+        //     this.emitUsageHeader();
+        // }
+        //
+        // this.ensureBlankLine();
         this.emitLine("package ", this._kotlinOptions.packageName);
         this.ensureBlankLine();
     }
@@ -338,7 +342,7 @@ export class KotlinRenderer extends ConvenienceRenderer {
         this.emitLine("data class ", className, " (");
         this.indent(() => {
             let count = c.getProperties().size;
-            let first = true;
+            // let first = true;
             this.forEachClassProperty(c, "none", (name, jsonName, p) => {
                 const nullable = p.type.kind === "union" && nullableFromUnion(p.type as UnionType) !== null;
                 const nullableOrOptional = p.isOptional || p.type.kind === "null" || nullable;
@@ -352,9 +356,9 @@ export class KotlinRenderer extends ConvenienceRenderer {
 
                 this.renameAttribute(name, jsonName, !nullableOrOptional, meta);
 
-                if (meta.length > 0 && !first) {
-                    this.ensureBlankLine();
-                }
+                // if (meta.length > 0 && !first) {
+                //     this.ensureBlankLine();
+                // }
 
                 for (const emit of meta) {
                     emit();
@@ -362,11 +366,11 @@ export class KotlinRenderer extends ConvenienceRenderer {
 
                 this.emitLine("val ", name, ": ", kotlinType(p), nullableOrOptional ? " = null" : "", last ? "" : ",");
 
-                if (meta.length > 0 && !last) {
-                    this.ensureBlankLine();
-                }
+                // if (meta.length > 0 && !last) {
+                //     this.ensureBlankLine();
+                // }
 
-                first = false;
+                // first = false;
             });
         });
 
@@ -1107,5 +1111,60 @@ export class KotlinXRenderer extends KotlinRenderer {
                 this.emitLine(`@SerialName("${jsonEnum}") `, name, `("${jsonEnum}")`, --count === 0 ? ";" : ",");
             });
         });
+    }
+}
+
+
+export class KotlinMoshiRenderer extends KotlinRenderer {
+    constructor(
+        targetLanguage: TargetLanguage,
+        renderContext: RenderContext,
+        _kotlinOptions: OptionValues<typeof kotlinOptions>
+    ) {
+        super(targetLanguage, renderContext, _kotlinOptions);
+    }
+
+    protected anySourceType(optional: string): Sourcelike {
+        return ["Any", optional];
+    }
+
+    protected emitHeader(): void {
+        super.emitHeader();
+
+        this.emitLine("import com.squareup.moshi.JsonClass");
+        this.emitLine("import com.squareup.moshi.Json");
+    }
+
+    protected emitClassAnnotations(_c: Type, _className: Name) {
+        this.emitLine("@JsonClass(generateAdapter = true)");
+    }
+
+    protected emitEnumDefinition(e: EnumType, enumName: Name): void {
+        this.emitDescription(this.descriptionForType(e));
+
+        this.emitLine(["@JsonClass(generateAdapter = false)"]);
+        this.emitBlock(["enum class ", enumName, "(val value: String)"], () => {
+            let count = e.cases.size;
+            this.forEachEnumCase(e, "none", (name, json) => {
+                const jsonEnum = stringEscape(json);
+                this.emitLine(`@Json(name = "${jsonEnum}") `, name, `("${jsonEnum}")`, --count === 0 ? ";" : ",");
+            });
+        });
+    }
+
+    protected renameAttribute(name: Name, jsonName: string, _required: boolean, meta: Array<() => void>) {
+        const rename = this._rename(name, jsonName);
+        if (rename !== undefined) {
+            meta.push(() => this.emitLine(rename));
+        }
+    }
+
+    private _rename(propName: Name, jsonName: string): Sourcelike | undefined {
+        const escapedName = stringEscape(jsonName);
+        const namesDiffer = this.sourcelikeToString(propName) !== escapedName;
+        if (namesDiffer) {
+            return ['@Json(name = "', escapedName, '")'];
+        }
+        return undefined;
     }
 }
