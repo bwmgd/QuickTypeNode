@@ -1,7 +1,7 @@
 {
   "name": "yapi_quick_type",
   "version": "1.0.0",
-  "description": "Yapi插件QuickType服务",
+  "description": "Yapi插件QuickType服务(kotlin-moshi) fork by bwmgd",
   "scripts": {
     "start": "node ./src/start.js"
   },
