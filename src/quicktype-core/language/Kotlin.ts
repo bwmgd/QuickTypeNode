@@ -264,7 +264,7 @@ export class KotlinRenderer extends ConvenienceRenderer {
         return ["Map<String, ", this.kotlinType(mapType.values, withIssues), ">"];
     }
 
-    protected kotlinType(t: Type, withIssues = false, noOptional = false): Sourcelike {
+    protected kotlinType(t: Type, withIssues = false, noOptional = true): Sourcelike {
         const optional = noOptional ? "" : "?";
         return matchType<Sourcelike>(
             t,
