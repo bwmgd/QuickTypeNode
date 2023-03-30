@@ -1180,30 +1180,31 @@ function tokenize(text: string): string {
   const tokens = [];
 
   while (text.length > 0) {
-    // 优先匹配自定义词汇表
+    let found = false;
+    // 尝试匹配自定义词汇表中的词汇
     for (let i = text.length; i > 0; i--) {
-      if (custom_dic.has(text.slice(0, i))) {
-        tokens.push(text.slice(0, i));
-        text = text.slice(i);
+      if (custom_dic.has(text.slice(-i))) {
+        tokens.unshift(text.slice(-i));
+        text = text.slice(0, -i);
+        found = true;
         break;
       }
-      // 如果找不到自定义词汇表中的词汇，使用最大匹配算法
-      if (i === 1) {
-        for (let j = text.length; j > 0; j--) {
-          if (words.has(text.slice(0, j))) {
-            tokens.push(text.slice(0, j));
-            text = text.slice(j);
-            break;
-          }
-          if (j === 1) {
-            tokens.push(text.charAt(0));
-            text = text.slice(1);
-          }
+    }
+    // 如果不包含自定义词汇，则使用最大匹配算法
+    if (!found) {
+      for (let j = Math.min(text.length, 10); j > 0; j--) {
+        if (words.has(text.slice(-j))) {
+          tokens.unshift(text.slice(-j));
+          text = text.slice(0, -j);
+          break;
+        }
+        if (j === 1) {
+          tokens.unshift(text.charAt(text.length - 1));
+          text = text.slice(0, -1);
         }
       }
     }
   }
-
   return toCamelCase(tokens);
 }
 
