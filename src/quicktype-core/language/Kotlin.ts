@@ -37,6 +37,7 @@ import {
 import {matchType, nullableFromUnion, removeNullFromUnion} from "../TypeUtils";
 import {RenderContext} from "../Renderer";
 import {acronymOption, acronymStyle, AcronymStyleOptions} from "../support/Acronyms";
+import {custom_dic, words} from "../../utils/words";
 
 export enum Framework {
   None,
@@ -364,8 +365,9 @@ export class KotlinRenderer extends ConvenienceRenderer {
           emit();
         }
 
+        const cname = modifySource(tokenize, name);
         // this.emitLine("val ", name, ": ", kotlinType(p), nullableOrOptional ? " = null" : "", last ? "" : ",");
-        this.emitLine("val ", name, ": ", kotlinType(p), "?", last ? "" : ",");
+        this.emitLine("val ", cname, ": ", kotlinType(p), "?", last ? "" : ",");
 
         // if (meta.length > 0 && !last) {
         //     this.ensureBlankLine();
@@ -1168,4 +1170,42 @@ export class KotlinMoshiRenderer extends KotlinRenderer {
     }
     return undefined;
   }
+}
+
+
+function tokenize(text: string): string {
+  text = text.toLowerCase();
+  const tokens = [];
+
+  while (text.length > 0) {
+    // 优先匹配自定义词汇表
+    for (let i = text.length; i > 0; i--) {
+      if (custom_dic.has(text.slice(0, i))) {
+        tokens.push(text.slice(0, i));
+        text = text.slice(i);
+        break;
+      }
+      // 如果找不到自定义词汇表中的词汇，使用最大匹配算法
+      if (i === 1) {
+        for (let j = text.length; j > 0; j--) {
+          if (words.has(text.slice(0, j))) {
+            tokens.push(text.slice(0, j));
+            text = text.slice(j);
+            break;
+          }
+          if (j === 1) {
+            tokens.push(text.charAt(0));
+            text = text.slice(1);
+          }
+        }
+      }
+    }
+  }
+
+  return toCamelCase(tokens);
+}
+
+function toCamelCase(components: string[]): string {
+  // 将除首个单词外的单词首字母大写
+  return components[0] + components.slice(1).map(x => x.charAt(0).toUpperCase() + x.slice(1)).join('');
 }
