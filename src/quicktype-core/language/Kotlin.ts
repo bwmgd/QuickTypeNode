@@ -258,7 +258,8 @@ export class KotlinRenderer extends ConvenienceRenderer {
   // (asarazan): I've broken out the following two functions
   // because some renderers, such as kotlinx, can cope with `any`, while some get mad.
   protected arrayType(arrayType: ArrayType, withIssues = false, _noOptional = false): Sourcelike {
-    return ["List<", this.kotlinType(arrayType.items, withIssues), ">"];
+    const cc = modifySource(upperFirst, modifySource(tokenize, this.kotlinType(arrayType.items, withIssues)));
+    return ["List<", cc, ">"];
   }
 
   protected mapType(mapType: MapType, withIssues = false, _noOptional = false): Sourcelike {
@@ -340,7 +341,8 @@ export class KotlinRenderer extends ConvenienceRenderer {
 
     this.emitDescription(this.descriptionForType(c));
     this.emitClassAnnotations(c, className);
-    this.emitLine("data class ", className, " (");
+    const classModify = modifySource(upperFirst, modifySource(tokenize, className));
+    this.emitLine("data class ", classModify, " (");
     this.indent(() => {
       let count = c.getProperties().size;
       // let first = true;
@@ -1208,4 +1210,9 @@ function tokenize(text: string): string {
 function toCamelCase(components: string[]): string {
   // 将除首个单词外的单词首字母大写
   return components[0] + components.slice(1).map(x => x.charAt(0).toUpperCase() + x.slice(1)).join('');
+}
+
+// 首字母大写
+function upperFirst(str: string): string {
+  return str.charAt(0).toUpperCase() + str.slice(1);
 }
