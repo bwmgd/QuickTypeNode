@@ -1,30 +1,22 @@
-# 1. Background introduction
+# 一、背景介绍
 
-This Node service is a Node service that integrates QuickType for secondary development.Mainly provides parsing services
-for the [YApiQuickType plugin](https://plugins.jetbrains.com/plugin/18847-yapi-quicktype/documentation)
+本Node服务是集成了QuickType，对其二次开发的一个Node服务。主要为[YApiQuickType插件](https://plugins.jetbrains.com/plugin/18847-yapi-quicktype/documentation)
+提供解析服务
 
-Fixed some usage scenarios of QuickType, as follows:
+本Fork魔改了Kotlin部分，只支持Moshi，通过词典最大匹配算法，对全大写的Json数据转换为驼峰命名，因此建议使用插件[JsonToKotlin](https://plugins.jetbrains.com/plugin/21598-jsontokotlin)
 
-* Java classes cannot be generated into a file
-* The Dart class is generated incorrectly, and it does not adapt to the null-safe writing method.
+具体Kotlin逻辑位于```src/quicktype-core/language/Kotlin.ts```
 
-# 2. Local construction
+由于词典局限性不能保证全部正确\
+可以在 ```words_alpha.txt```中修改词典，在```src/utils/words.ts```修改优先匹配词
 
-You can build this Node service in the following two ways
+# 二、本地搭建
 
-**1. Directly start the service locally**
+执行以下2条命令即可，启动成功后控制台会打印服务访问链接
 
-Execute the following 2 commands. After the startup is successful, the console will print the service access link
+将访问连接填入插件设置中的```QuickTypeNode service address```
 
 ```
 npm install 
 npm start
 ```
-
-**2. Docker image startup**
-
-```
-docker run --name=quicktype -d -p 8085:8085 guohanlin/quicktype:latest
-```
-
-[中文文档](./README_CN.md)
