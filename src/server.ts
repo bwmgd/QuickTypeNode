@@ -18,7 +18,7 @@ app.get('/', function (req, res) {
 app.post('/api/quickType/conversion', async (req, res) => {
   logger.info(req.body);
   let conversionType = req.body['conversionType'];
-  let targetLanguage = 'Kotlin';
+  let targetLanguage = req.body['targetLanguage'];
   let className = req.body['className'];
   let jsonString = req.body['jsonString'];
   logger.info('类型转换接口请求参数:\n',
@@ -26,21 +26,11 @@ app.post('/api/quickType/conversion', async (req, res) => {
     '\n目标语言:' + targetLanguage,
     '\n类名:' + className,
     '\njson字符串:' + jsonString);
-  let result;
+  let result: { retCode: number; message: string; info: any; } | { retCode: number; message: string; info?: undefined; };
   if (conversionType === 'json') {
     result = await quickTypeByJSON(targetLanguage, className, jsonString);
-    result = {
-      retCode: 0,
-      message: '转换类型成功',
-      info: result
-    };
   } else if (conversionType === 'jsonSchema') {
     result = await quickTypeByJSONSchema(targetLanguage, className, jsonString);
-    result = {
-      retCode: 0,
-      message: '转换类型成功',
-      info: result
-    };
   } else {
     result = {
       retCode: -1,
