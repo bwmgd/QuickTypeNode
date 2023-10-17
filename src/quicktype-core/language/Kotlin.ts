@@ -1164,13 +1164,15 @@ export class KotlinMoshiRenderer extends KotlinRenderer {
     }
   }
 
+  // @ts-ignore
   private _rename(propName: Name, jsonName: string): Sourcelike | undefined {
     const escapedName = stringEscape(jsonName);
-    const namesDiffer = this.sourcelikeToString(propName) !== escapedName;
-    if (namesDiffer) {
-      return ['@Json(name = "', escapedName, '")'];
-    }
-    return undefined;
+    // const namesDiffer = this.sourcelikeToString(propName) !== tokenize(escapedName);
+    // const namesDiffer = true;
+    // if (namesDiffer) {
+    return ['@Json(name = "', escapedName, '")'];
+    // }
+    // return undefined;
   }
 }
 
